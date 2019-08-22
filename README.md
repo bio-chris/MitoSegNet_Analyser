@@ -55,6 +55,7 @@ Create a table containing the following information:
 * The p-value of the hypothesis test 
 * Single values for each descriptor are assigned a separate Excel sheet 
 
+##### Functionality
 
 * Select table 1 
 * Enter name of sample 1
