@@ -10,7 +10,7 @@ The MitoSegNet Analyser is intended to be used after successful segmentation wit
 
 Select this option to generate Excel tables containing summarized shape descriptor measurements of all images. Once the tables have been generated you may proceed with Analyse
 
-* Enter name of measurments table 
+* Enter name of measurements table 
 * Select directory in which table should be saved
 * Select directory containing 8-bit raw images
 * Select directory containing segmented images 
@@ -40,13 +40,15 @@ maximum and number of objects per image are collected.
 
 ## Analyse 
 
-To gain further insights from the table generated with Get Measurements, Analyse allow to create tables with statistical information 
+To gain further insights from the tables generated with Get Measurements, Analyse allows to create tables with statistical information.
 
 ### 2 samples
 
 If you want to compare the morphology of two samples then use this section. 
 
 #### Morphological comparison - Generate table 
+
+Works only with samples that contain at least 8 images or more. 
 
 Create a table containing the following information:
 
@@ -65,7 +67,7 @@ Create a table containing the following information:
 
 #### Morphological comparison - Generate plots
 
-Creates boxplots with indication of statistically significant difference. 
+Creates boxplots with indication of statistically significant difference (only if number of images per sample greater or equal to 8). 
 
 * Select table 1 
 * Enter name of sample 1
@@ -88,7 +90,7 @@ Check correlation between up to 4 descriptors.
 
 ### More than 2 samples
 
-If you want to compare the morphology of multipel samples use this section. 
+If you want to compare the morphology of multipel samples use this section. Please be aware that the number of images in each sample should be equal. 
 
 #### Morphological comparison - Generate table 
 
