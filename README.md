@@ -2,9 +2,11 @@
 
 ---
 
-The MitoSegNet Analyser is intended to be used after successful segmentation with the MitoSegNet but can in theory be applied to any dataset consisting of 8-bit raw images and their masks. 
+The MitoSegNet Analyser is intended to be used after successful segmentation with the MitoSegNet but can also be applied to any dataset consisting of 8-bit raw images and their masks. 
 
 ## Running the MitoSegNet Analyser
+
+Do not close the terminal while running the MitoSegNet Analyser. 
 
 ## Get Measurements 
 
@@ -55,6 +57,7 @@ Create a table containing the following information:
 * The normality test p-value for each descriptor and sample 
 * The Hypothesis test used to compare the descriptors of sample 1 and 2
 * The p-value of the hypothesis test 
+* The effect size 
 * Single values for each descriptor are assigned a separate Excel sheet 
 
 ##### Functionality
@@ -90,7 +93,7 @@ Check correlation between up to 4 descriptors.
 
 ### More than 2 samples
 
-If you want to compare the morphology of multipel samples use this section. Please be aware that the number of images in each sample should be equal. 
+If you want to compare the morphology of multiple samples use this section. Please be aware that the number of images in each sample should be equal. 
 
 #### Morphological comparison - Generate table 
 
