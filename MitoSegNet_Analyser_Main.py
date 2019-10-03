@@ -35,7 +35,7 @@ import itertools
 import numpy as np
 import cv2
 import pandas as pd
-from skimage import img_as_bool, io, color
+from skimage import img_as_bool
 from skimage.morphology import skeletonize
 from skan import summarise
 from skimage.measure import regionprops, label
@@ -50,8 +50,8 @@ warnings.simplefilter("ignore", FutureWarning)
 warnings.simplefilter("ignore", RuntimeWarning)
 
 
-pd.set_option('display.max_columns', 10)
-pd.set_option('display.width', 1000)
+#pd.set_option('display.max_columns', 10)
+#pd.set_option('display.width', 1000)
 
 
 # GUI
@@ -253,7 +253,8 @@ class Get_Measurements(Control):
                 i currently cannot include the branch data in the same table as the morph parameters    
                 """
 
-                read_lab_skel = img_as_bool(color.rgb2gray(io.imread(labpath.get() + os.sep + img)))
+                #read_lab_skel = img_as_bool(color.rgb2gray(io.imread(labpath.get() + os.sep + img)))
+                read_lab_skel = img_as_bool(cv2.imread(labpath.get() + os.sep + img, cv2.IMREAD_GRAYSCALE))
                 lab_skel = skeletonize(read_lab_skel).astype("uint8")
 
                 branch_data = summarise(lab_skel)
@@ -378,12 +379,15 @@ class MorphComparison(Control):
 
             max_vals.append(np.max(values_list))
 
-            if normaltest(values_list)[1] > 0.05:
-                normtest_list.append(True)
-            else:
-                normtest_list.append(False)
+            if len(values_list) >= 8:
 
-            norm_p.append(normaltest(values_list)[1])
+                if normaltest(values_list)[1] > 0.05:
+                    normtest_list.append(True)
+                else:
+                    normtest_list.append(False)
+
+                norm_p.append(normaltest(values_list)[1])
+
 
         # converting dictionary with different list lengths into a pandas dataframe
         dataframe = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in data_d.items()]))
@@ -396,8 +400,15 @@ class MorphComparison(Control):
             eff_siz_l = []
 
             for a, b in itertools.combinations([tab1_name, tab2_name], 2):
-                pval = stat_func(dataframe[a].dropna(), dataframe[b].dropna())
-                eff_siz = cohens_d(dataframe[a].dropna(), dataframe[b].dropna())
+
+                if dataframe[a].dropna().tolist() != dataframe[b].dropna().tolist():
+
+                    pval = stat_func(dataframe[a].dropna(), dataframe[b].dropna())
+                    eff_siz = cohens_d(dataframe[a].dropna(), dataframe[b].dropna())
+
+                else:
+                    pval = [1,1]
+                    eff_siz = 0
 
                 data1_l.append(a)
                 data2_l.append(b)
@@ -416,20 +427,25 @@ class MorphComparison(Control):
 
             return cohens_d
 
-        if False in normtest_list:
+        if len(values_list) >= 8:
 
-            data1_l, data2_l, pval_l, eff_siz_l = compare_samples(mannwhitneyu)
+            if False in normtest_list:
 
-            hyp_test = "Mann-Whitney U test"
+                data1_l, data2_l, pval_l, eff_siz_l = compare_samples(mannwhitneyu)
+
+                hyp_test = "Mann-Whitney U test"
+
+            else:
+                data1_l, data2_l, pval_l, eff_siz_l = compare_samples(ttest_ind)
+
+                hyp_test = "T-test (two independent samples)"
+
+
+            return norm_p, dataframe, pval_l, eff_siz_l, hyp_test, max_vals
 
         else:
-            data1_l, data2_l, pval_l, eff_siz_l = compare_samples(ttest_ind)
 
-            hyp_test = "T-test (two independent samples)"
-
-
-        return norm_p, dataframe, pval_l, eff_siz_l, hyp_test, max_vals
-
+            return False, dataframe, False, False, False, False
 
     def morph_comparison_table(self):
 
@@ -477,13 +493,12 @@ class MorphComparison(Control):
         descriptor_list, stat_list = control_class.stat_and_desc()
 
         stat_value.set("Average")
-        Label(ma_root, text="Select statistical value to analyze", bd=1).place(bordermode=OUTSIDE, x=15, y=300)
+        Label(ma_root, text="Select statistical value to analyse", bd=1).place(bordermode=OUTSIDE, x=15, y=300)
         popupMenu_stat = OptionMenu(ma_root, stat_value, *set(stat_list))
         popupMenu_stat.place(bordermode=OUTSIDE, x=25, y=320, height=30, width=160)
 
 
         def start_analysis():
-
 
             stat_val = stat_value.get()
 
@@ -514,6 +529,9 @@ class MorphComparison(Control):
                                                                                            table_path2.get(), tab1_name,
                                                                                            tab2_name, stat_val)
 
+                if norm_p == False:
+                    raise ValueError('Number of samples needs to be 8 or higher for statistical analysis')
+
                 dataframe.to_excel(writer, sheet_name="sing_vals_"+desc)
 
                 norm_p_l1.append(norm_p[0])
@@ -523,7 +541,6 @@ class MorphComparison(Control):
                 es_l.append(eff_siz_l[0])
                 n_l.append(len(dataframe))
 
-
             stat_frame["Descriptor"] = descriptor_list
             stat_frame[new_tab1_name] = norm_p_l1
             stat_frame[new_tab2_name] = norm_p_l2
@@ -532,13 +549,11 @@ class MorphComparison(Control):
             stat_frame["Effect size"] = es_l
             stat_frame["N"] = n_l
 
-
             stat_frame.to_excel(writer, sheet_name="Statistics_Summary")
 
             writer.save()
 
             tkinter.messagebox.showinfo("Done", "Table generated", parent=ma_root)
-
 
         self.place_button(ma_root, "Create table", start_analysis, 195, 370, 30, 110)
 
@@ -591,12 +606,12 @@ class MorphComparison(Control):
         descriptor_list, stat_list = control_class.stat_and_desc()
 
         descriptor.set("Area")
-        Label(ma_root, text="Select shape descriptor to analyze", bd=1).place(bordermode=OUTSIDE, x=15, y=300)
+        Label(ma_root, text="Select shape descriptor to display", bd=1).place(bordermode=OUTSIDE, x=15, y=300)
         popupMenu_desc = OptionMenu(ma_root, descriptor, *set(descriptor_list))
         popupMenu_desc.place(bordermode=OUTSIDE, x=25, y=320, height=30, width=160)
 
         stat_value.set("Average")
-        Label(ma_root, text="Select statistical value to analyze", bd=1).place(bordermode=OUTSIDE, x=255, y=300)
+        Label(ma_root, text="Select statistical value to display", bd=1).place(bordermode=OUTSIDE, x=255, y=300)
         popupMenu_stat = OptionMenu(ma_root, stat_value, *set(stat_list))
         popupMenu_stat.place(bordermode=OUTSIDE, x=265, y=320, height=30, width=160)
 
@@ -623,43 +638,44 @@ class MorphComparison(Control):
             norm_p, dataframe, pval_l, eff_siz_l, hyp_test, max_vals = self.get_stats(desc, table_path1.get(), table_path2.get(),
                                                                             tab1_name, tab2_name, stat_val)
 
+            if norm_p != False:
 
-            # table with p-values and effect sizes
-            ########
-            stat_frame[new_tab1_name] = [norm_p[0]]
-            stat_frame[new_tab2_name] = [norm_p[1]]
-            stat_frame["Hypothesis test"] = [hyp_test]
-            stat_frame["Hypothesis test p-value"] = pval_l
-            stat_frame["Effect size"] = eff_siz_l
-            stat_frame["N"] = [len(dataframe)]
-            ########
+                # table with p-values and effect sizes
+                ########
+                stat_frame[new_tab1_name] = [norm_p[0]]
+                stat_frame[new_tab2_name] = [norm_p[1]]
+                stat_frame["Hypothesis test"] = [hyp_test]
+                stat_frame["Hypothesis test p-value"] = pval_l
+                stat_frame["Effect size"] = eff_siz_l
+                stat_frame["N"] = [len(dataframe)]
+                ########
 
 
-            increase = 0
-            for index, row in stat_frame.iterrows():
+                increase = 0
+                for index, row in stat_frame.iterrows():
 
-                if row["Hypothesis test p-value"] > 0.05:
-                    p = 0
+                    if row["Hypothesis test p-value"] > 0.05:
+                        p = 0
 
-                elif 0.01 < row["Hypothesis test p-value"] < 0.05:
-                    p = 1
+                    elif 0.01 < row["Hypothesis test p-value"] < 0.05:
+                        p = 1
 
-                elif 0.001 < row["Hypothesis test p-value"] < 0.01:
-                    p = 2
+                    elif 0.001 < row["Hypothesis test p-value"] < 0.01:
+                        p = 2
 
-                else:
-                    p = 3
+                    else:
+                        p = 3
 
-                max_bar = np.max(max_vals)
+                    max_bar = np.max(max_vals)
 
-                x1 = 0
-                x2 = 1
+                    x1 = 0
+                    x2 = 1
 
-                significance_bar(pos_y=max_bar + 0.1 * max_bar + increase, pos_x=[x1, x2], bar_y=max_bar * 0.05, p=p,
-                                 y_dist=max_bar * 0.02,
-                                 distance=0.05)
+                    significance_bar(pos_y=max_bar + 0.1 * max_bar + increase, pos_x=[x1, x2], bar_y=max_bar * 0.05, p=p,
+                                     y_dist=max_bar * 0.02,
+                                     distance=0.05)
 
-                increase += max_bar * 0.1
+                    increase += max_bar * 0.1
 
             # select plot
             plot = sb.boxplot(data=dataframe, color="white", fliersize=0)
@@ -748,7 +764,7 @@ class CorrelationAnalysis(Control):
         descriptor_list, stat_list = control_class.stat_and_desc()
 
         stat_value.set("Average")
-        Label(ca_root, text="Select statistical value to analyze", bd=1).place(bordermode=OUTSIDE, x=15, y=300)
+        Label(ca_root, text="Select statistical value to display", bd=1).place(bordermode=OUTSIDE, x=15, y=300)
         popupMenu_stat = OptionMenu(ca_root, stat_value, *set(stat_list))
         popupMenu_stat.place(bordermode=OUTSIDE, x=25, y=320, height=30, width=160)
 
@@ -781,10 +797,13 @@ class CorrelationAnalysis(Control):
 
         place_checkbutton(ca_root, "Max Intensity", max_int, 30, 520, 100)
 
-
         def pair_analysis():
 
-            descriptor_list, stat_list = control_class.stat_and_desc()
+            #descriptor_list, stat_list = control_class.stat_and_desc()
+
+            descriptor_list = ["Number of branches", "Branch length", "Total branch length", "Curvature index",
+                               "Area", "Minor Axis Length", "Major Axis Length", "Eccentricity", "Perimeter",
+                               "Solidity", "Mean Intensity", "Max Intensity", "Min Intensity", "Image", "Data"]
 
             variable_list = [nb, bl, tbl, ci, ar, min_al, maj_al, ecc, per, sol, mean_int, max_int, min_int]
 
@@ -809,8 +828,8 @@ class CorrelationAnalysis(Control):
                     new_table_sd = new_table_sd.transpose()
 
                     new_table = pd.concat([new_table_ba, new_table_sd], axis=1, sort=False)
-
                     temp_list = new_table.iloc[2].tolist()
+
                     temp_list.append(img)
                     temp_list.append(table_name)
 
@@ -823,7 +842,7 @@ class CorrelationAnalysis(Control):
 
             final_table = table2.append(table)
 
-            print(final_table)
+            #print(final_table)
 
             selection_list = ["Data"]
             for name, var in zip(descriptor_list, variable_list):
@@ -835,16 +854,11 @@ class CorrelationAnalysis(Control):
                 if len(selection_list) == 5:
                     break
 
-            print(selection_list)
-
             final_table = final_table[selection_list]
             sb.pairplot(final_table, hue="Data")
 
-            #sb.lmplot(data=final_table, x="Number of branches", y="Branch length", hue="Data")
-
             plt.title(stat_value.get())
             plt.show()
-
 
         self.place_button(ca_root, "Start analysis", pair_analysis, 195, 580, 30, 110)
         ca_root.mainloop()
@@ -857,7 +871,6 @@ class MultiMorphComparison(Control):
 
     def morph_comparison_table(self):
 
-
         mma_root = Tk()
 
         self.new_window(mma_root, "MitoSegNet Analyser - Get statistics of morphological comparison", 500, 270)
@@ -865,7 +878,6 @@ class MultiMorphComparison(Control):
 
         dir_path = StringVar(mma_root)
         stat_value = StringVar(mma_root)
-
 
         def askopendir():
             set_dirpath = tkinter.filedialog.askdirectory(parent=mma_root, title='Choose a directory')
@@ -876,12 +888,11 @@ class MultiMorphComparison(Control):
         self.place_button(mma_root, "Browse", askopendir, 435, 60, 30, 50)
         self.place_entry(mma_root, dir_path, 25, 60, 30, 400)
 
-
         # select statistical value
         descriptor_list, stat_list = control_class.stat_and_desc()
 
         stat_value.set("Average")
-        Label(mma_root, text="Select statistical value to analyze", bd=1).place(bordermode=OUTSIDE, x=15, y=120)
+        Label(mma_root, text="Select statistical value to analyse", bd=1).place(bordermode=OUTSIDE, x=15, y=120)
         popupMenu_stat = OptionMenu(mma_root, stat_value, *set(stat_list))
         popupMenu_stat.place(bordermode=OUTSIDE, x=25, y=140, height=30, width=160)
 
@@ -933,6 +944,9 @@ class MultiMorphComparison(Control):
                     # how to acess statistical values
                     values_list = meas_table[stat_val].tolist()
 
+                    if len(values_list) < 8:
+
+                        raise ValueError('Number of samples needs to be 8 or higher for statistical analysis')
 
                     ######
                     max_vals.append(np.max(values_list))
@@ -944,9 +958,7 @@ class MultiMorphComparison(Control):
 
                 stat_frame[table_name + " normality test p-value"] = norm_p
 
-
             stat_frame.to_excel(writer, sheet_name="Statistics Summary")
-
 
             hyp_test = []
             hyp_p = []
@@ -970,27 +982,40 @@ class MultiMorphComparison(Control):
                 # tests null hypothesis that all input samples are from populations with equal variance
                 p_lev = levene(*l)[1]
 
+                ident = False
+                for a, b in itertools.combinations(l, 2):
+
+                    if a == b:
+                        ident = True
+
                 # unpacking list using the *args syntax
                 """
                 *args and **kwargs allow you to pass a variable number of arguments to a function. 
                 """
-                if False in normal:
-                    p_val = kruskal(*l)[1]
 
-                    hyp_test.append("Kruskal-Wallis test")
+                if ident == False:
+
+                    if False in normal:
+                        p_val = kruskal(*l)[1]
+
+                        hyp_test.append("Kruskal-Wallis test")
+
+                    else:
+
+                        # since no welch's ANOVA is implemented in python i am alternatively using the kruskal-wallis test
+                        # for unequal variance (but normally distributed)
+                        if p_lev > 0.05:
+                            p_val = f_oneway(*l)[1]
+                            hyp_test.append("one-way ANOVA")
+
+                        else:
+                            p_val = kruskal(*l)[1]
+                            hyp_test.append("Kruskal-Wallis test")
 
                 else:
 
-                    # since no welch's ANOVA is implemented in python i am alternatively using the kruskal-wallis test
-                    # for unequal variance (but normally distributed)
-                    if p_lev > 0.05:
-                        p_val = f_oneway(*l)[1]
-                        hyp_test.append("one-way ANOVA")
-
-                    else:
-                        p_val = kruskal(*l)[1]
-                        hyp_test.append("Kruskal-Wallis test")
-
+                    p_val = 1
+                    hyp_test.append("No test possible")
 
                 hyp_p.append(p_val)
 
@@ -1004,13 +1029,9 @@ class MultiMorphComparison(Control):
 
             writer.save()
 
-            ########################
-            ########################
-
         self.place_button(mma_root, "Create table", multi_sample_table, 195, 200, 30, 110)
 
         mma_root.mainloop()
-
 
     def morph_comparison_plot(self):
 
@@ -1022,7 +1043,6 @@ class MultiMorphComparison(Control):
         dir_path = StringVar(mmp_root)
         stat_value = StringVar(mmp_root)
         descriptor = StringVar(mmp_root)
-
 
         def askopendir():
             set_dirpath = tkinter.filedialog.askdirectory(parent=mmp_root, title='Choose a directory')
@@ -1041,10 +1061,9 @@ class MultiMorphComparison(Control):
         popupMenu_desc.place(bordermode=OUTSIDE, x=25, y=120, height=30, width=160)
 
         stat_value.set("Average")
-        Label(mmp_root, text="Select statistical value to plot", bd=1).place(bordermode=OUTSIDE, x=255, y=100)
+        Label(mmp_root, text="Select statistical value to display", bd=1).place(bordermode=OUTSIDE, x=255, y=100)
         popupMenu_stat = OptionMenu(mmp_root, stat_value, *set(stat_list))
         popupMenu_stat.place(bordermode=OUTSIDE, x=265, y=120, height=30, width=160)
-
 
         def multi_sample_plot():
 
@@ -1059,12 +1078,9 @@ class MultiMorphComparison(Control):
             for i in table_list:
                 new_table_list.append(i.split("_")[0])
 
-
             ylab = stat_val + " " + desc.lower()
             ylab_size = 34
             xlab = new_table_list
-
-            #stat_frame = pd.DataFrame()
 
             dataframe = pd.DataFrame(columns=table_list)
 
@@ -1076,12 +1092,10 @@ class MultiMorphComparison(Control):
                 table_sd = pd.read_excel(folder_path + os.sep + table_name, sheet_name="ShapeDescriptors")
 
                 max_vals = []
-                norm_p = []
+                #norm_p = []
 
                 #for desc in descriptor_list:
 
-                ########################
-                ########################
                 if desc == "Number of branches" or desc == "Branch length" or desc == "Total branch length" or desc == "Curvature index":
 
                     table = table_ba
@@ -1095,88 +1109,11 @@ class MultiMorphComparison(Control):
                 # how to acess statistical values
                 values_list = meas_table[stat_val].tolist()
 
-
                 ######
                 max_vals.append(np.max(values_list))
                 ######
 
-                norm_p.append(normaltest(values_list)[1])
-
                 dataframe[table_name] = values_list
-
-                #stat_frame[table_name + " normality test p-value"] = norm_p
-
-
-            # todo : not sure if i should include post hoc test to determine significance in plot
-            ####################################
-            """
-
-            hyp_test = []
-            hyp_p = []
-
-
-            l = []
-            normal = []
-
-            for name in dataframe:
-                l.append(dataframe[name].tolist())
-
-            # tests null hypothesis that all input samples are from populations with equal variance
-            p_lev = levene(*l)[1]
-
-            # unpacking list using the *args syntax
-            #*args and **kwargs allow you to pass a variable number of arguments to a function. 
-            
-            if False in normal:
-                p_val = kruskal(*l)[1]
-
-                hyp_test.append("Kruskal-Wallis test")
-
-            else:
-
-                # since no welch's ANOVA is implemented in python i am alternatively using the kruskal-wallis test
-                # for unequal variance (but normally distributed)
-                if p_lev > 0.05:
-                    p_val = f_oneway(*l)[1]
-                    hyp_test.append("one-way ANOVA")
-
-                else:
-                    p_val = kruskal(*l)
-                    hyp_test.append("Kruskal-Wallis test")
-
-            hyp_p.append(p_val)
-
-            ####################################
-
-            #print(dataframe)
-
-            
-            increase = 0
-            for index, row in stat_frame.iterrows():
-
-                if row["Hypothesis test p-value"] > 0.05:
-                    p = 0
-
-                elif 0.01 < row["Hypothesis test p-value"] < 0.05:
-                    p = 1
-
-                elif 0.001 < row["Hypothesis test p-value"] < 0.01:
-                    p = 2
-
-                else:
-                    p = 3
-
-                max_bar = np.max(max_vals)
-
-                x1 = 0
-                x2 = 1
-
-                significance_bar(pos_y=max_bar + 0.1 * max_bar + increase, pos_x=[x1, x2], bar_y=max_bar * 0.05, p=p,
-                                 y_dist=max_bar * 0.02,
-                                 distance=0.05)
-
-                increase += max_bar * 0.1
-            """
 
             # select plot
             plot = sb.boxplot(data=dataframe, color="white", fliersize=0)
@@ -1193,8 +1130,6 @@ class MultiMorphComparison(Control):
             plot.tick_params(axis="y", labelsize=28)
 
             plt.show()
-
-
 
         self.place_button(mmp_root, "Create plot", multi_sample_plot, 195, 200, 30, 110)
 
@@ -1215,7 +1150,7 @@ if __name__ == '__main__':
     control_class.small_menu(root)
 
     control_class.place_button(root, "Get measurements", get_measurements.get_measurements_window, 85, 20, 60, 150)
-    control_class.place_button(root, "Analyze", mid_window.midwindow, 85, 100, 60, 150)
+    control_class.place_button(root, "Analyse", mid_window.midwindow, 85, 100, 60, 150)
 
     root.mainloop()
 
